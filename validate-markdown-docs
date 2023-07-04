@@ -1,0 +1,172 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# This script checks for broken links in Markdown files.
+#
+# It does this by finding all defined inline links (e.g.
+# '[link title](../dir/file.md)'), and then checking that this link
+# is valid.
+#
+# It supports validating the following types of links:
+# - relative links (e.g. '[link title](../../dir/file.md)'),
+# - absolute links to the repo (e.g.
+#     'https://github.com/user/repo/blob/master/...'),
+# - section links (e.g. '#link-to-anchor') - but only within the
+#   same file only for now.
+#
+# It does not:
+# - Make HTTP requests.
+# - Confirm that external links resolve and result in 200s.
+# - Validate section links across files.
+require 'find'
+require 'net/http'
+require 'pathname'
+require 'uri'
+
+# Regex for finding inline links in markdown files.
+INLINE_LINKS_RE = /\[(?<description>[^\]]+)\]\((?<link>[^)]+)\)/.freeze
+MAIN_CANDIDATES = %w[main master].freeze
+MARKDOWN_FILE_EXTENSION = '.md'
+
+# This class provides a test suite for checking broken links in Markdown files.
+class TestMarkdownLinks
+  def initialize(docs_base)
+    @docs_base = docs_base
+    @remote_url = `cd #{docs_base} && git remote get-url origin`.strip
+  end
+
+  def run
+    markdown_files = find_markdown_files
+    failures = []
+    markdown_files.each do |file|
+      failures += process_file(file)
+    end
+    failures
+  end
+
+  private
+
+  def process_file(file)
+    failures = []
+    content = File.read(file)
+    matches = content.scan(INLINE_LINKS_RE)
+    matches.each do |match|
+      title, link = match
+      result = process_match(title, link, file, content)
+      failures << result if result
+    end
+    failures
+  end
+
+  def process_match(title, link, inspected_markdown_file_path, content)
+    # Normalize the link to a relative path, if we can.
+    normalized_link = normalize(link, inspected_markdown_file_path)
+    # If the link is still to an external site, silently skip for now.
+    return nil if external?(normalized_link)
+
+    # Validate section links.
+    if section?(normalized_link)
+      return "Broken section link: [#{title}](#{link}) in file: #{inspected_markdown_file_path}" \
+        unless does_section_exist(normalized_link, content)
+
+      return nil
+    end
+
+    # Validate relative links' file actually exists
+    return nil if exists?(normalized_link, inspected_markdown_file_path)
+
+    "Broken relative link: [#{title}](#{link}) in file: #{inspected_markdown_file_path}"
+  end
+
+  def find_markdown_files
+    Dir.glob("**/*#{MARKDOWN_FILE_EXTENSION}", base: '.')
+  end
+
+  def normalize(link, inspected_markdown_file_path)
+    return link if link.start_with?('#')
+
+    # For links that are external links but still links to these docs,
+    # we need to convert them to relative links from the current markdown
+    # file's directory (e.g. "../../../mysql/linked_file.md").
+    #
+    # We don't know whether the main branch is 'main' or 'master', so try both.
+    MAIN_CANDIDATES.each do |main_branch|
+      try_url = "#{@remote_url}/blob/#{main_branch}/"
+      next unless link.start_with?(try_url)
+
+      # Remove the long URL prefix in 'link'.
+      link = link.sub(try_url, '')
+      # Get the markdown file's directory.
+      # e.g. 'docs/mysql/playbooks/instruction.md' -> 'docs/mysql/playbooks'.
+      prefix = File.dirname(inspected_markdown_file_path)
+      # Replace each directory in prefix with '..'.
+      # This is now pointing to the root of the repo.
+      # e.g. 'docs/mysql/playbooks' -> '../../..'
+      prefix = prefix.gsub(%r{[^/]+}, '..')
+      # Join the prefix and the link.
+      # e.g. '../../..' + 'mysql/linked_file.md' -> '../../../mysql/linked_file.md'
+      link = File.join(prefix, link)
+      # Don't support validating links that contain anchors for now, only
+      # validate that the path exists in that case. So just remove the anchor
+      # from these for the moment.
+      # e.g. '../linked_file.md#anchor' -> '../linked_file.md'
+      link = link.split('#').first if link.include?('#')
+      return link
+    end
+    link
+  end
+
+  def external?(link)
+    link.start_with?('http') && link.include?('://')
+  end
+
+  def section?(link)
+    link.start_with?('#')
+  end
+
+  def exists?(path_from_markdown, original_markdown_file_path)
+    # Going from `original_markdown_file_path`, resolve `path_from_markdown`.
+    # e.g. `original_markdown_file_path` = 'docs/mysql/playbooks/instruction.md'
+    #      `path_from_markdown` = '../linked_file.md'
+    #      `resolved_relative_path` = 'docs/mysql/linked_file.md'
+    # If the resolved path doesn't have a file there, then the link is broken.
+    resolved_relative_path = File.join(File.dirname(original_markdown_file_path), path_from_markdown)
+    File.exist?(resolved_relative_path)
+  end
+
+  def does_section_exist(link, markdown)
+    # Remove '#' from the link
+    link = link[1..] if link.start_with?('#')
+    # Make lowercase
+    link = link.downcase
+    # Find every title in markdown - anything that starts with "#" and has a space
+    titles = markdown.lines.select { |line| line.match?('\A#+\s') }
+    # Attempt to turn the title into a markdown link and compare it to the link we're looking for
+    titles.each do |mock_link|
+      # Remove all non-valid characters
+      mock_link = mock_link.gsub(/[^a-zA-Z0-9\-\s]/, '')
+      mock_link = mock_link.strip.downcase
+      mock_link = mock_link.gsub(/\s/, '-')
+      return true if mock_link == link
+    end
+
+    false
+  end
+end
+
+def main(args)
+  docs_base = args[0]
+  docs_base = Dir.pwd if docs_base.nil?
+  failures = TestMarkdownLinks.new(docs_base).run
+  if failures.empty?
+    exit 0
+  else
+    puts "Found #{failures.length} broken links:"
+    failures.each do |failure|
+      puts "- #{failure}"
+    end
+    exit 1
+  end
+end
+
+main(ARGV) if $PROGRAM_NAME == __FILE__
