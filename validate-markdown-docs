@@ -1,23 +1,22 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# This script checks for broken links in Markdown files.
+# This script checks for broken links in a set of Markdown files. It takes a
+# single argument from the commandline, which should be the root directory of
+# the docs you would like to validate.
 #
-# It does this by finding all defined inline links (e.g.
-# '[link title](../dir/file.md)'), and then checking that this link
-# is valid.
+# Usage:
+#   $ ./markdown_link_validator [directory_path]
 #
-# It supports validating the following types of links:
-# - relative links (e.g. '[link title](../../dir/file.md)'),
-# - absolute links to the repo (e.g.
-#     'https://github.com/user/repo/blob/master/...'),
-# - section links (e.g. '#link-to-anchor') - but only within the
-#   same file only for now.
+# Arguments:
+#   [directory_path]: Optional. The path to the directory containing the Markdown documentation.
+#                    If not provided, the script will use the current directory as the starting point.
 #
-# It does not:
-# - Make HTTP requests.
-# - Confirm that external links resolve and result in 200s.
-# - Validate section links across files.
+# Example:
+#   To check for broken links in a folder called "/my/docs", run:
+#     $ ./markdown_link_validator /my/docs
+#
+
 require 'find'
 require 'net/http'
 require 'pathname'
