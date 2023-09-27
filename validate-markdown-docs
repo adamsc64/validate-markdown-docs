@@ -28,7 +28,7 @@ require 'uri'
 
 # Regex for finding inline links in markdown files, for example:
 # `[description](link)`.
-INLINE_LINKS_RE = /\[(?<description>[^\]]+)\]\((?<link>[^)]+)\)/.freeze
+INLINE_LINKS_RE = /\[(?<description>[^\]]+)\]\((?<link>[^)]+)\)/
 # Git branch names that are considered the "main" branch.
 MAIN_CANDIDATES = %w[main master].freeze
 # Markdown file extension.
@@ -89,7 +89,8 @@ class Validator
     # Validate section links.
     if section?(normalized_link)
       return "Broken section link: [#{title}](#{link}) in file: #{inspected_markdown_file_path}" \
-        unless does_section_exist(normalized_link, content)
+        unless does_section_exist(normalized_link, content) ||
+               does_anchor_exist(normalized_link, content)
 
       return nil
     end
@@ -185,6 +186,18 @@ class Validator
       return true if mock_link == link
     end
 
+    false
+  end
+
+  def does_anchor_exist(link, markdown)
+    # Remove '#' from the link.
+    link = link[1..] if link.start_with?('#')
+    # Make lowercase.
+    link = link.downcase
+    # find every <a> tag in markdown
+    markdown.scan(%r{<a.*?name="(.*?)".*?>(.*?)</a>}).each do |name, _content|
+      return true if name == link
+    end
     false
   end
 end
