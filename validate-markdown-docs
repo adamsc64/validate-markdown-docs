@@ -119,24 +119,28 @@ class Validator
 
       # Remove the long URL prefix.
       link = link.sub(try_url, '')
-      # Get the markdown file's directory.
-      # e.g. 'docs/mysql/playbooks/instruction.md' -> 'docs/mysql/playbooks'.
-      prefix = File.dirname(inspected_markdown_file_path)
-      # Replace each directory in prefix with '..' to point to begin
-      # from the root of the repo, relative to the currently inspected
-      # markdown file.
-      # e.g. 'docs/mysql/playbooks' -> '../../..'
-      prefix = prefix.gsub(%r{[^/]+}, '..')
-      # Join the prefix and the link, which _should_ be from the root.
-      # e.g. '../../..' + 'mysql/linked_file.md' -> '../../../mysql/linked_file.md'
-      link = File.join(prefix, link)
-      # Don't support validating links that contain anchors for now, only
-      # validate that the path exists in that case. So just remove the anchor
-      # from these for the moment.
-      # e.g. '../linked_file.md#anchor' -> '../linked_file.md'
-      link = link.split('#').first if link.include?('#')
-      return link
+      return normalize_link(link, inspected_markdown_file_path)
     end
+    link
+  end
+
+  def normalize_link(link, inspected_markdown_file_path)
+    # Get the markdown file's directory.
+    # e.g. 'docs/mysql/playbooks/instruction.md' -> 'docs/mysql/playbooks'.
+    prefix = File.dirname(inspected_markdown_file_path)
+    # Replace each directory in prefix with '..' to point to begin
+    # from the root of the repo, relative to the currently inspected
+    # markdown file.
+    # e.g. 'docs/mysql/playbooks' -> '../../..'
+    prefix = prefix.gsub(%r{[^/]+}, '..')
+    # Join the prefix and the link, which _should_ be from the root.
+    # e.g. '../../..' + 'mysql/linked_file.md' -> '../../../mysql/linked_file.md'
+    link = File.join(prefix, link)
+    # Don't support validating links that contain anchors for now, only
+    # validate that the path exists in that case. So just remove the anchor
+    # from these for the moment.
+    # e.g. '../linked_file.md#anchor' -> '../linked_file.md'
+    link = link.split('#').first if link.include?('#')
     link
   end
 
@@ -184,10 +188,13 @@ class Validator
   end
 end
 
-def main(args)
-  docs_base = args[0]
+def validator(docs_base)
   docs_base = Dir.pwd if docs_base.nil?
-  failures = Validator.new(docs_base).run
+  Validator.new(docs_base)
+end
+
+def main(args)
+  failures = validator(args[0]).run
   if failures.empty?
     exit 0
   else
