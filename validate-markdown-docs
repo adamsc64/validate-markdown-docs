@@ -61,7 +61,7 @@ class Validator
   # @return [Array<String>] An array of failure messages.
   def process_file(file)
     failures = []
-    content = File.read(file)
+    content = File.read("#{@docs_base}/#{file}")
     matches = content.scan(INLINE_LINKS_RE)
     matches.each do |match|
       title, link = match
@@ -101,7 +101,7 @@ class Validator
   end
 
   def find_markdown_files
-    Dir.glob("**/*#{MARKDOWN_FILE_EXTENSION}", base: '.')
+    Dir.glob("**/*#{MARKDOWN_FILE_EXTENSION}", base: @docs_base)
   end
 
   def normalize(link, inspected_markdown_file_path)
@@ -155,6 +155,7 @@ class Validator
   # Check the existence of a reference.
   # Example:
   def exists?(path_from_markdown, original_markdown_file_path)
+    original_markdown_file_path = "#{@docs_base}/#{original_markdown_file_path}"
     # Going from `original_markdown_file_path`, resolve
     # `path_from_markdown`.
     # e.g. `original_markdown_file_path` = 'docs/mysql/playbooks/instruction.md'
