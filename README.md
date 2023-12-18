@@ -35,6 +35,17 @@ This will check all Markdown files in the directory and its subdirectories for b
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/adamsc64/markdown-link-validator.
 
+To install dependencies:
+```
+$ gem install bundler
+$ bundle install
+```
+
+To run all unit tests:
+```
+bundle exec rspec spec/
+```
+
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
