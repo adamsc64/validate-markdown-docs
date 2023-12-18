@@ -28,7 +28,7 @@ require 'uri'
 
 # Regex for finding inline links in markdown files, for example:
 # `[description](link)`.
-INLINE_LINKS_RE = /\[(?<description>[^\]]+)\]\((?<link>[^)]+)\)/
+INLINE_LINKS_RE = /\[(?<description>[^\]]+)\]\((?<link>[^)]+)\)/.freeze
 # Git branch names that are considered the "main" branch.
 MAIN_CANDIDATES = %w[main master].freeze
 # Markdown file extension.
