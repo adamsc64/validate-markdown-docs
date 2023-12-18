@@ -195,7 +195,7 @@ class Validator
     # Make lowercase.
     link = link.downcase
     # find every <a> tag in markdown
-    markdown.scan(%r{<a.*?name="(.*?)".*?>(.*?)</a>}).each do |name, _content|
+    markdown.scan(%r{<a.*?name="(.*?)".*?>.*?</a>}).each do |name|
       return true if name == link
     end
     false
